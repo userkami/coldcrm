@@ -1,26 +1,118 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+@theme {
+  --color-surface: #0b1120;
+  --color-surface-2: #111a2e;
+  --color-surface-3: #18233d;
+  --color-edge: #22304f;
+  --color-brand: #38bdf8;
+  --color-brand-strong: #0ea5e9;
+  --color-good: #34d399;
+  --color-warn: #fbbf24;
+  --color-bad: #f87171;
+  --color-ink: #e6edf7;
+  --color-ink-dim: #93a3bd;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html {
+  color-scheme: dark;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--color-surface);
+  color: var(--color-ink);
+  font-family: var(--font-geist-sans), system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* A subtle grid so the dashboard does not read as a flat void. */
+.bg-grid {
+  background-image:
+    linear-gradient(rgba(56, 189, 248, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(56, 189, 248, 0.05) 1px, transparent 1px);
+  background-size: 32px 32px;
+}
+
+.card {
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-edge);
+  border-radius: 0.75rem;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border-radius: 0.5rem;
+  font-weight: 600;
+  transition: background-color 120ms ease, opacity 120ms ease;
+  cursor: pointer;
+  padding: 0.625rem 1rem;
+  font-size: 0.875rem;
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-primary {
+  background: var(--color-brand-strong);
+  color: #04121f;
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: var(--color-brand);
+}
+
+.btn-ghost {
+  background: transparent;
+  border: 1px solid var(--color-edge);
+  color: var(--color-ink-dim);
+}
+
+.btn-ghost:hover:not(:disabled) {
+  color: var(--color-ink);
+  border-color: var(--color-brand-strong);
+}
+
+.input {
+  width: 100%;
+  background: var(--color-surface-3);
+  border: 1px solid var(--color-edge);
+  border-radius: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  color: var(--color-ink);
+  font-size: 0.875rem;
+  outline: none;
+}
+
+.input:focus {
+  border-color: var(--color-brand-strong);
+  box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.15);
+}
+
+.input::placeholder {
+  color: #5c6b85;
+}
+
+select.input option {
+  background: var(--color-surface-3);
+  color: var(--color-ink);
+}
+
+/* Thin scrollbars in the dense lead table. */
+.scroll-thin::-webkit-scrollbar {
+  height: 8px;
+  width: 8px;
+}
+
+.scroll-thin::-webkit-scrollbar-thumb {
+  background: var(--color-edge);
+  border-radius: 4px;
+}
+
+.scroll-thin::-webkit-scrollbar-track {
+  background: transparent;
 }

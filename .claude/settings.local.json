@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cd /tmp)",
+      "Bash(STEPS='[ *)",
+      "Bash(cp \"C:/Users/Kamran/AppData/Local/Temp/crmshots/01-login.png\" public/screenshots/)",
+      "Bash(cp \"C:/Users/Kamran/AppData/Local/Temp/crmshots/02-agent.png\" public/screenshots/)",
+      "Bash(cp \"C:/Users/Kamran/AppData/Local/Temp/crmshots/04-manager-kpis.png\" public/screenshots/)",
+      "Bash(git init *)",
+      "Bash(git add *)"
+    ]
+  }
+}

@@ -6,12 +6,19 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test": "node --import ./scripts/ts-resolver.mjs --test src/lib/*.test.ts",
+    "seed": "node scripts/seed-leads.mjs",
+    "seed:sheets": "node scripts/seed-leads.mjs --sheets",
+    "bootstrap:sheet": "node scripts/bootstrap-sheet.mjs"
   },
   "dependencies": {
+    "googleapis": "^187.0.0",
     "next": "16.4.2",
     "react": "19.3.0",
-    "react-dom": "19.3.0"
+    "react-dom": "19.3.0",
+    "recharts": "^3.10.1",
+    "server-only": "^0.0.1"
   },
   "devDependencies": {
     "@tailwindcss/turbopack": "^4",
