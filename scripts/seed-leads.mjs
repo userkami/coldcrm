@@ -3,13 +3,34 @@
  *
  * Works against either backend:
  *   node scripts/seed-leads.mjs              # memory backend (.data/crm.json)
- *   node scripts/seed-leads.mjs --sheets     # the Google Sheet
+ *   npm run seed:sheets                       # the Google Sheet
  *
  * Run scripts/bootstrap-sheet.mjs first if you are targeting Sheets.
+ *
+ * The Sheets backend imports "server-only", which is a marker package that
+ * throws unless the "react-server" export condition is active. Next.js sets
+ * that condition for React Server Components; a plain node process does not,
+ * so `npm run seed:sheets` passes --conditions=react-server.
  */
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import process from "node:process";
+
+// ---- Environment -----------------------------------------------------------
+
+// The app reads its configuration from .env.local (Next.js loads it
+// automatically), but a plain `node scripts/seed-leads.mjs` does not. Load it
+// here so `npm run seed:sheets` finds the same SHEET_ID and service-account
+// credentials the app uses. Values already present in the environment win, so
+// `SHEET_ID=... npm run seed:sheets` still overrides the file.
+try {
+  process.loadEnvFile(".env.local");
+} catch (error) {
+  // A missing .env.local is fine — the environment may still supply
+  // everything it needs. A malformed one is not, and should be reported
+  // rather than swallowed into a confusing "SHEET_ID is required" later.
+  if (error?.code !== "ENOENT") throw error;
+}
 
 // ---- Config ----------------------------------------------------------------
 
@@ -237,6 +258,12 @@ async function seedSheets() {
   console.log(`Writing ${leads.length} leads and ${USERS.length} users to the sheet…`);
 
   // Users: the repository's upsert handles add-or-update per email.
+  //
+  // The repository is TypeScript with extensionless relative imports, which
+  // Node's own resolver rejects. The test runner handles this with a
+  // resolver hook (scripts/ts-resolver.mjs); the same hook is loaded here so
+  // the seed script and the tests resolve modules identically.
+  await import("./ts-resolver.mjs");
   const { SheetsRepository } = await import("../src/lib/repo/sheets.ts");
   const repo = new SheetsRepository(spreadsheetId, 0);
   for (const user of USERS) {
@@ -251,9 +278,13 @@ async function seedSheets() {
     l.lockToken,
   ]);
 
+  // Clear the data rows only. Row 1 is the header the app reads to map
+  // columns, and the repository skips the first row when it lists records —
+  // wiping the header would both break every read and make the app treat the
+  // first seeded lead as a header, silently losing it.
   await sheets.spreadsheets.values.clear({
     spreadsheetId,
-    range: "'Leads'!A:N",
+    range: "'Leads'!A2:N",
   });
   await sheets.spreadsheets.values.update({
     spreadsheetId,
@@ -267,7 +298,7 @@ async function seedSheets() {
   ]);
   await sheets.spreadsheets.values.clear({
     spreadsheetId,
-    range: "'CallLogs'!A:G",
+    range: "'CallLogs'!A2:G",
   });
   if (logRows.length > 0) {
     await sheets.spreadsheets.values.update({
@@ -279,12 +310,12 @@ async function seedSheets() {
   }
 
   // The claims ledger is append-only; clearing it resets the lock history.
+  // The header row stays put, same as above.
   await sheets.spreadsheets.values.clear({
     spreadsheetId,
-    range: "'Claims'!A:F",
+    range: "'Claims'!A2:F",
   });
 
-  void sheets;
   console.log("Seed complete.");
 }
 

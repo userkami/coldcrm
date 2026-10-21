@@ -94,11 +94,19 @@ Run the seed script to populate the sheet with demo users and leads:
 npm run seed:sheets
 ```
 
+The script reads `SHEET_ID`, `GOOGLE_CLIENT_EMAIL` and `GOOGLE_PRIVATE_KEY` from
+`.env.local` automatically, so there is nothing to export first. Anything you
+do set in the shell takes precedence over the file.
+
 This creates:
 - **1 manager**: `manager@company.com` / PIN `4821`
 - **3 agents**: `agent1@company.com` / `1234`, `agent2@company.com` / `2345`, `agent3@company.com` / `3456`
 - **60 realistic leads** with Pakistani names, businesses, and phone numbers
-- **46 call log entries** so the manager analytics have data
+- **~45 call log entries** so the manager analytics have data (the exact count varies, since a random share of leads is seeded with a prior call)
+
+Re-running the seed replaces the contents of the `Leads` and `CallLogs` tabs
+and clears the `Claims` lock ledger. The header row of each tab is left in
+place — the app reads row 1 to map columns, so it must survive.
 
 ---
 
@@ -125,6 +133,12 @@ Open [http://localhost:3000](http://localhost:3000). Log in as a manager or agen
 
 **"Quota exceeded"**
 - You hit the Google Sheets API rate limit (300 requests/min/project, 60 req/min/user). Wait a minute and try again. The app caches reads for 5 seconds to reduce quota usage.
+
+**"SHEET_ID is required"**
+- The seed script could not find a spreadsheet ID. It reads `.env.local` from the project root, so run it from there (`npm run seed:sheets`) and check that `SHEET_ID` is set in that file.
+
+**"This module cannot be imported from a Client Component module."**
+- The seed script was run without the `react-server` export condition, which the `server-only` marker package requires. Use `npm run seed:sheets` rather than calling `node scripts/seed-leads.mjs --sheets` directly — the npm script passes `--conditions=react-server`.
 
 ---
 
