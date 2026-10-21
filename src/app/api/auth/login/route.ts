@@ -1,5 +1,6 @@
 import { cookies } from "next/headers";
 import { getRepository } from "@/lib/repo";
+import { failureResponse } from "@/lib/api";
 import { createSessionToken, SESSION_COOKIE, sessionCookieOptions } from "@/lib/session";
 
 export async function POST(request: Request) {
@@ -20,26 +21,34 @@ export async function POST(request: Request) {
     );
   }
 
-  const repo = await getRepository();
-  const user = await repo.getUser(email);
+  try {
+    const repo = await getRepository();
+    const user = await repo.getUser(email);
 
-  // Same message whether the account is unknown, inactive or the PIN is
-  // wrong, so the form cannot be used to enumerate accounts.
-  if (!user || !user.active || user.pin !== pin) {
-    return Response.json(
-      { error: "Incorrect email or PIN." },
-      { status: 401 },
+    // Same message whether the account is unknown, inactive or the PIN is
+    // wrong, so the form cannot be used to enumerate accounts.
+    if (!user || !user.active || user.pin !== pin) {
+      return Response.json(
+        { error: "Incorrect email or PIN." },
+        { status: 401 },
+      );
+    }
+
+    const token = createSessionToken(user);
+    const store = await cookies();
+    store.set(SESSION_COOKIE, token, sessionCookieOptions());
+
+    return Response.json({
+      ok: true,
+      role: user.role,
+      name: user.name,
+      redirectTo: user.role === "MANAGER" ? "/manager" : "/agent",
+    });
+  } catch (error) {
+    return failureResponse(
+      "login",
+      error,
+      "Could not sign in. Please try again.",
     );
   }
-
-  const token = createSessionToken(user);
-  const store = await cookies();
-  store.set(SESSION_COOKIE, token, sessionCookieOptions());
-
-  return Response.json({
-    ok: true,
-    role: user.role,
-    name: user.name,
-    redirectTo: user.role === "MANAGER" ? "/manager" : "/agent",
-  });
 }

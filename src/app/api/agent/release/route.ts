@@ -1,5 +1,6 @@
 import { requireRoleApi } from "@/lib/auth";
 import { getRepository } from "@/lib/repo";
+import { failureResponse } from "@/lib/api";
 import { releaseLead } from "@/lib/queue";
 
 /**
@@ -24,20 +25,28 @@ export async function POST(request: Request) {
     );
   }
 
-  const repo = await getRepository();
-  const released = await releaseLead(
-    repo,
-    { email: auth.session.email, name: auth.session.name },
-    body.leadId,
-    body.claimId,
-  );
+  try {
+    const repo = await getRepository();
+    const released = await releaseLead(
+      repo,
+      { email: auth.session.email, name: auth.session.name },
+      body.leadId,
+      body.claimId,
+    );
 
-  if (!released) {
-    return Response.json(
-      { error: "This lead is no longer assigned to you." },
-      { status: 409 },
+    if (!released) {
+      return Response.json(
+        { error: "This lead is no longer assigned to you." },
+        { status: 409 },
+      );
+    }
+
+    return Response.json({ ok: true });
+  } catch (error) {
+    return failureResponse(
+      "release",
+      error,
+      "Could not release the lead. Please try again.",
     );
   }
-
-  return Response.json({ ok: true });
 }

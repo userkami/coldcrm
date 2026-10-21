@@ -15,6 +15,8 @@ A **$0/month** cold-calling CRM built with Next.js, React, Tailwind CSS, and Goo
 - **Live stats bar** — calls today, interested, open callbacks
 - **Disposition form** — outcome dropdown (7 statuses), notes textarea, callback date picker (appears only for "Callback Requested")
 - **Skip button** — returns the lead to the queue without logging a call
+- **My Call History** — private history of the signed-in agent's saved calls, with Today, Yesterday, Last 7 Days and inclusive custom date ranges, an outcome filter, summary totals, and paginated call details.
+- **Filtered CSV export** — downloads every call matching the history filters (not just the visible page), with dates in `CRM_TIME_ZONE` (default `Asia/Karachi`). Each saved attempt is a separate row; skipped leads are excluded. Lead names, company and phone use the current lead details; outcomes, notes and callback dates come from each call's log.
 
 ### Manager Dashboard (`/manager`)
 - **KPI cards** — total leads, contacted, open, conversion % (interested / contacted)
@@ -265,6 +267,7 @@ See [`.env.example`](.env.example) for the full list with descriptions. Key vars
 - **`AUTH_SECRET`** (required) — random secret for session cookies
 - **`CRM_DATA_BACKEND`** — `memory` or `sheets`
 - **`MEMORY_DB_PATH`** — path to JSON file (default `.data/crm.json`)
+- **`CRM_TIME_ZONE`** — IANA business timezone for agent daily totals, history filters, displayed times and exports (default `Asia/Karachi`)
 - **`SHEET_ID`** — Google Sheets spreadsheet ID
 - **`GOOGLE_CLIENT_EMAIL`** — service account email
 - **`GOOGLE_PRIVATE_KEY`** — service account private key (with `\n` sequences)

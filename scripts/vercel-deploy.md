@@ -107,7 +107,18 @@ When pasting `GOOGLE_PRIVATE_KEY` into Vercel's environment variable field:
 
 ### Memory Backend on Vercel
 
-**Don't use `CRM_DATA_BACKEND=memory` in production on Vercel.** Vercel's filesystem is ephemeral — on each cold start, the JSON file resets to empty. Use the Sheets backend for persistence, or migrate to Firestore (Phase 2).
+**Don't use `CRM_DATA_BACKEND=memory` in production on Vercel.** Vercel's filesystem is read-only and ephemeral: every write fails with `EROFS`, and the JSON file resets on each cold start. The app refuses to start with this backend on Vercel and reports the misconfiguration instead of serving a dashboard that can read seed data but never record a call. Use the Sheets backend for persistence, or migrate to Firestore (Phase 2).
+
+### "Could not reach the server." on the Agent Portal
+
+If the agent dashboard shows this message, the request never reached a working backend. Check, in order:
+
+1. **`CRM_DATA_BACKEND` is set to `sheets`** in the Vercel project settings, for all three environments (Production, Preview, Development). Setting it only in Production leaves preview deployments on the memory backend.
+2. **`SHEET_ID`, `GOOGLE_CLIENT_EMAIL` and `GOOGLE_PRIVATE_KEY` are set** — a missing one makes the Sheets backend throw on the first read.
+3. **The deployment was rebuilt after the variables were added.** Vercel only applies environment variables to a new deployment; redeploy from the Deployments tab.
+4. **The function did not time out.** Claiming a lead waits out the settle window and makes several Sheets calls, so the route sets `maxDuration = 30`.
+
+`GET /api/manager/analytics` returning `totalLeads: 60` is the quickest way to confirm the sheet is reachable and the backend is the Sheets one.
 
 ### Custom Domain
 

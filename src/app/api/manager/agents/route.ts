@@ -1,18 +1,27 @@
 import { requireRoleApi } from "@/lib/auth";
 import { getRepository } from "@/lib/repo";
+import { failureResponse } from "@/lib/api";
 import type { Role } from "@/lib/types";
 
 export async function GET() {
   const auth = await requireRoleApi("MANAGER");
   if ("response" in auth) return auth.response;
 
-  const repo = await getRepository();
-  const users = await repo.listUsers();
+  try {
+    const repo = await getRepository();
+    const users = await repo.listUsers();
 
-  // The PIN is never sent to the browser.
-  return Response.json({
-    users: users.map(({ pin: _pin, ...rest }) => rest),
-  });
+    // The PIN is never sent to the browser.
+    return Response.json({
+      users: users.map(({ email, name, role, active }) => ({ email, name, role, active })),
+    });
+  } catch (error) {
+    return failureResponse(
+      "manager agents",
+      error,
+      "Could not load the agent list. Please try again.",
+    );
+  }
 }
 
 export async function POST(request: Request) {
@@ -38,79 +47,87 @@ export async function POST(request: Request) {
     return Response.json({ error: "Enter a valid email address." }, { status: 400 });
   }
 
-  const repo = await getRepository();
-  const existing = await repo.getUser(email);
+  try {
+    const repo = await getRepository();
+    const existing = await repo.getUser(email);
 
-  // Guard the last manager: the app must never be left with nobody able to
-  // administer it.
-  const managers = (await repo.listUsers()).filter(
-    (u) => u.role === "MANAGER" && u.active,
-  );
-  const isDemotingLastManager =
-    existing?.role === "MANAGER" &&
-    (body.role === "AGENT" || body.action === "deactivate");
-  if (isDemotingLastManager && managers.length <= 1) {
-    return Response.json(
-      { error: "You cannot remove the only active manager account." },
-      { status: 400 },
+    // Guard the last manager: the app must never be left with nobody able to
+    // administer it.
+    const managers = (await repo.listUsers()).filter(
+      (u) => u.role === "MANAGER" && u.active,
     );
-  }
-
-  const action = body.action ?? (existing ? "update" : "create");
-
-  if (action === "deactivate") {
-    await repo.upsertUser({
-      email,
-      name: existing?.name ?? email,
-      pin: existing?.pin ?? "",
-      role: existing?.role ?? "AGENT",
-      active: false,
-    });
-    // Free any lead this agent was holding so it returns to the queue.
-    const leads = await repo.listLeads();
-    for (const lead of leads) {
-      if (lead.assignedTo === email && lead.lockToken) {
-        await repo.releaseLock(lead.id);
-      }
+    const isDemotingLastManager =
+      existing?.role === "MANAGER" &&
+      (body.role === "AGENT" || body.action === "deactivate");
+    if (isDemotingLastManager && managers.length <= 1) {
+      return Response.json(
+        { error: "You cannot remove the only active manager account." },
+        { status: 400 },
+      );
     }
-    return Response.json({ ok: true });
-  }
 
-  if (action === "reset-pin") {
+    const action = body.action ?? (existing ? "update" : "create");
+
+    if (action === "deactivate") {
+      await repo.upsertUser({
+        email,
+        name: existing?.name ?? email,
+        pin: existing?.pin ?? "",
+        role: existing?.role ?? "AGENT",
+        active: false,
+      });
+      // Free any lead this agent was holding so it returns to the queue.
+      const leads = await repo.listLeads();
+      for (const lead of leads) {
+        if (lead.assignedTo === email && lead.lockToken) {
+          await repo.releaseLock(lead.id);
+        }
+      }
+      return Response.json({ ok: true });
+    }
+
+    if (action === "reset-pin") {
+      const pin = (body.pin ?? "").trim();
+      if (!/^\d{4,8}$/.test(pin)) {
+        return Response.json(
+          { error: "PIN must be 4 to 8 digits." },
+          { status: 400 },
+        );
+      }
+      if (!existing) {
+        return Response.json({ error: "No such agent." }, { status: 404 });
+      }
+      await repo.upsertUser({ ...existing, pin });
+      return Response.json({ ok: true });
+    }
+
+    // create / update
     const pin = (body.pin ?? "").trim();
-    if (!/^\d{4,8}$/.test(pin)) {
+    const creating = !existing;
+    if (creating && !/^\d{4,8}$/.test(pin)) {
       return Response.json(
         { error: "PIN must be 4 to 8 digits." },
         { status: 400 },
       );
     }
-    if (!existing) {
-      return Response.json({ error: "No such agent." }, { status: 404 });
-    }
-    await repo.upsertUser({ ...existing, pin });
-    return Response.json({ ok: true });
-  }
 
-  // create / update
-  const pin = (body.pin ?? "").trim();
-  const creating = !existing;
-  if (creating && !/^\d{4,8}$/.test(pin)) {
-    return Response.json(
-      { error: "PIN must be 4 to 8 digits." },
-      { status: 400 },
+    const role: Role = body.role === "MANAGER" ? "MANAGER" : "AGENT";
+    await repo.upsertUser({
+      email,
+      name: (body.name ?? existing?.name ?? email).trim(),
+      pin: creating || pin ? pin : (existing?.pin ?? ""),
+      role,
+      active: body.active ?? existing?.active ?? true,
+    });
+
+    return Response.json({ ok: true });
+  } catch (error) {
+    return failureResponse(
+      "manager agents save",
+      error,
+      "Could not save that agent. Please try again.",
     );
   }
-
-  const role: Role = body.role === "MANAGER" ? "MANAGER" : "AGENT";
-  await repo.upsertUser({
-    email,
-    name: (body.name ?? existing?.name ?? email).trim(),
-    pin: creating || pin ? pin : (existing?.pin ?? ""),
-    role,
-    active: body.active ?? existing?.active ?? true,
-  });
-
-  return Response.json({ ok: true });
 }
 
 export async function DELETE(request: Request) {
@@ -128,31 +145,39 @@ export async function DELETE(request: Request) {
     );
   }
 
-  const repo = await getRepository();
-  const existing = await repo.getUser(email);
-  if (!existing) {
-    return Response.json({ error: "No such agent." }, { status: 404 });
-  }
+  try {
+    const repo = await getRepository();
+    const existing = await repo.getUser(email);
+    if (!existing) {
+      return Response.json({ error: "No such agent." }, { status: 404 });
+    }
 
-  const managers = (await repo.listUsers()).filter(
-    (u) => u.role === "MANAGER" && u.active,
-  );
-  if (existing.role === "MANAGER" && managers.length <= 1) {
-    return Response.json(
-      { error: "You cannot remove the only active manager account." },
-      { status: 400 },
+    const managers = (await repo.listUsers()).filter(
+      (u) => u.role === "MANAGER" && u.active,
+    );
+    if (existing.role === "MANAGER" && managers.length <= 1) {
+      return Response.json(
+        { error: "You cannot remove the only active manager account." },
+        { status: 400 },
+      );
+    }
+
+    await repo.removeUser(email);
+
+    // Free any lead the removed agent was holding.
+    const leads = await repo.listLeads();
+    for (const lead of leads) {
+      if (lead.assignedTo === email && lead.lockToken) {
+        await repo.releaseLock(lead.id);
+      }
+    }
+
+    return Response.json({ ok: true });
+  } catch (error) {
+    return failureResponse(
+      "manager agents delete",
+      error,
+      "Could not remove that agent. Please try again.",
     );
   }
-
-  await repo.removeUser(email);
-
-  // Free any lead the removed agent was holding.
-  const leads = await repo.listLeads();
-  for (const lead of leads) {
-    if (lead.assignedTo === email && lead.lockToken) {
-      await repo.releaseLock(lead.id);
-    }
-  }
-
-  return Response.json({ ok: true });
 }

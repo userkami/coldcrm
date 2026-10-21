@@ -2,15 +2,21 @@
 
 import { useCallback, useEffect, useState } from "react";
 import type { Lead, LeadStatus } from "@/lib/types";
+import { describeFailure, readJson } from "@/lib/api-client";
 import { LeadCard } from "@/components/LeadCard";
 import { DispositionForm } from "@/components/DispositionForm";
 import { LogoutButton } from "@/components/LogoutButton";
+import { AgentCallHistory } from "@/components/AgentCallHistory";
 
 interface AgentStats {
   callsToday: number;
   interestedToday: number;
   openCallbacks: number;
 }
+
+type NextLeadResult =
+  | { lead: Lead | null; reason: string | null }
+  | { error: string };
 
 export function AgentPortal({ agentName }: { agentName: string }) {
   const [lead, setLead] = useState<Lead | null>(null);
@@ -23,48 +29,86 @@ export function AgentPortal({ agentName }: { agentName: string }) {
   const [loading, setLoading] = useState(true);
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
+  const [historyRevision, setHistoryRevision] = useState(0);
 
-  const refreshStats = useCallback(async () => {
-    try {
-      const res = await fetch("/api/agent/stats");
-      if (res.ok) setStats(await res.json());
-    } catch {
-      // Stats are decorative; a failure here must not block the agent.
+  // The requests are plain functions rather than state-setting callbacks, so
+  // the effect below can await them without setting state synchronously.
+  const requestNextLead = useCallback(async (): Promise<NextLeadResult> => {
+    const res = await fetch("/api/agent/next-lead", { method: "POST" });
+    const body = await readJson(res);
+    if (!res.ok) return { error: describeFailure(res, body) };
+    const nextLead = (body?.lead ?? null) as Lead | null;
+    const reason = typeof body?.reason === "string" ? body.reason : null;
+    return { lead: nextLead, reason };
+  }, []);
+
+  const requestStats = useCallback(async (): Promise<AgentStats | null> => {
+    const res = await fetch("/api/agent/stats");
+    if (!res.ok) return null;
+    const body = await readJson(res);
+    if (!body) return null;
+    return {
+      callsToday: Number(body.callsToday ?? 0),
+      interestedToday: Number(body.interestedToday ?? 0),
+      openCallbacks: Number(body.openCallbacks ?? 0),
+    };
+  }, []);
+
+  const applyNextLead = useCallback((result: NextLeadResult) => {
+    if ("error" in result) {
+      setError(result.error);
+      return;
     }
+    setError("");
+    setLead(result.lead);
+    setNotice(
+      result.lead
+        ? ""
+        : result.reason === "busy"
+          ? "Every lead is currently being worked by someone else. Try again in a moment."
+          : "There are no leads in the queue yet.",
+    );
   }, []);
 
   const fetchNext = useCallback(async () => {
     setLoading(true);
     setError("");
     try {
-      const res = await fetch("/api/agent/next-lead", { method: "POST" });
-      const data = await res.json();
-      if (!res.ok) {
-        setError(data.error ?? "Could not load a lead.");
-        return;
-      }
-      if (!data.lead) {
-        setLead(null);
-        setNotice(
-          data.reason === "busy"
-            ? "Every lead is currently being worked by someone else. Try again in a moment."
-            : "There are no leads in the queue yet.",
-        );
-        return;
-      }
-      setNotice("");
-      setLead(data.lead);
+      applyNextLead(await requestNextLead());
     } catch {
       setError("Could not reach the server.");
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [applyNextLead, requestNextLead]);
+
+  const refreshStats = useCallback(async () => {
+    try {
+      const next = await requestStats();
+      if (next) setStats(next);
+    } catch {
+      // Stats are decorative; a failure here must not block the agent.
+    }
+  }, [requestStats]);
 
   useEffect(() => {
-    void fetchNext();
-    void refreshStats();
-  }, [fetchNext, refreshStats]);
+    let active = true;
+    void (async () => {
+      try {
+        const [result, next] = await Promise.all([requestNextLead(), requestStats()]);
+        if (!active) return;
+        applyNextLead(result);
+        if (next) setStats(next);
+      } catch {
+        if (active) setError("Could not reach the server.");
+      } finally {
+        if (active) setLoading(false);
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [applyNextLead, requestNextLead, requestStats]);
 
   async function handleDisposition(data: {
     status: LeadStatus;
@@ -86,29 +130,32 @@ export function AgentPortal({ agentName }: { agentName: string }) {
           callbackDate: data.callbackDate,
         }),
       });
-      const body = await res.json();
+      const body = await readJson(res);
 
       if (res.status === 409) {
         // The lock is no longer ours: drop the card rather than overwrite
         // whoever holds it now.
-        setError(body.error);
+        setError(describeFailure(res, body));
         setLead(null);
         void fetchNext();
         return;
       }
       if (!res.ok) {
-        setError(body.error ?? "Could not save the outcome.");
+        setError(describeFailure(res, body));
         return;
       }
 
       void refreshStats();
-      if (body.nextLead) {
+      setHistoryRevision((value) => value + 1);
+      const nextLead = (body?.nextLead ?? null) as Lead | null;
+      if (nextLead) {
+        setError("");
         setNotice("");
-        setLead(body.nextLead);
+        setLead(nextLead);
       } else {
         setLead(null);
         setNotice(
-          body.reason === "busy"
+          body?.reason === "busy"
             ? "Queue is empty for now — all remaining leads are being worked."
             : "That was the last lead in the queue.",
         );
@@ -192,12 +239,14 @@ export function AgentPortal({ agentName }: { agentName: string }) {
           <>
             <LeadCard lead={lead} />
             <DispositionForm
+              key={`${lead.id}:${lead.lockToken}`}
               busy={busy}
               onSubmit={handleDisposition}
               onSkip={handleSkip}
             />
           </>
         ) : null}
+        <AgentCallHistory revision={historyRevision} />
       </main>
     </div>
   );

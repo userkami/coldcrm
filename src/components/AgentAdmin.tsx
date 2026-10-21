@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import type { PublicUser, Role } from "@/lib/types";
+import { describeFailure, readJson } from "@/lib/api-client";
 
 type ManagedUser = PublicUser;
 
@@ -34,9 +35,9 @@ export function AgentAdmin({
         ...init,
         headers: { "Content-Type": "application/json", ...(init.headers ?? {}) },
       });
-      const data = await res.json().catch(() => ({}));
+      const data = await readJson(res);
       if (!res.ok) {
-        setError(data.error ?? "That did not work.");
+        setError(describeFailure(res, data));
         return false;
       }
       return true;

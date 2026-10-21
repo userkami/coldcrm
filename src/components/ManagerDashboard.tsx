@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import type { Lead, ManagerAnalytics, PublicUser } from "@/lib/types";
+import { describeFailure, errorMessage, readJson } from "@/lib/api-client";
 import { KpiCards } from "./KpiCards";
 import { StatusBreakdown } from "./StatusBreakdown";
 import { AgentTable } from "./AgentTable";
@@ -23,30 +24,60 @@ export function ManagerDashboard({
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
 
+  // The requests are plain functions rather than state-setting callbacks, so
+  // the effect below can await them without setting state synchronously.
+  const requestData = useCallback(async () => {
+    const [a, l, u] = await Promise.all([
+      fetch("/api/manager/analytics"),
+      fetch("/api/manager/leads"),
+      fetch("/api/manager/agents"),
+    ]);
+    // The analytics call is the one that has to succeed — the others only
+    // populate tables. Its error is surfaced verbatim so a misconfigured
+    // deployment tells the operator what to fix.
+    if (!a.ok) {
+      throw new Error(describeFailure(a, await readJson(a)));
+    }
+    const nextAnalytics = (await a.json()) as ManagerAnalytics;
+    const nextLeads = l.ok ? ((await l.json()) as { leads: Lead[] }).leads : [];
+    const nextUsers = u.ok ? ((await u.json()) as { users: PublicUser[] }).users : [];
+    return { analytics: nextAnalytics, leads: nextLeads, users: nextUsers };
+  }, []);
+
   const load = useCallback(async () => {
     try {
-      const [a, l, u] = await Promise.all([
-        fetch("/api/manager/analytics"),
-        fetch("/api/manager/leads"),
-        fetch("/api/manager/agents"),
-      ]);
-      if (!a.ok) {
-        setError("Could not load analytics.");
-        return;
-      }
-      setAnalytics(await a.json());
-      if (l.ok) setLeads((await l.json()).leads);
-      if (u.ok) setUsers((await u.json()).users);
-    } catch {
-      setError("Could not reach the server.");
+      const next = await requestData();
+      setAnalytics(next.analytics);
+      setLeads(next.leads);
+      setUsers(next.users);
+      setError("");
+    } catch (err) {
+      setError(errorMessage(err, "Could not reach the server."));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [requestData]);
 
   useEffect(() => {
-    void load();
-  }, [load]);
+    let active = true;
+    void (async () => {
+      try {
+        const next = await requestData();
+        if (!active) return;
+        setAnalytics(next.analytics);
+        setLeads(next.leads);
+        setUsers(next.users);
+        setError("");
+      } catch (err) {
+        if (active) setError(errorMessage(err, "Could not reach the server."));
+      } finally {
+        if (active) setLoading(false);
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [requestData]);
 
   async function handleEdit(lead: Lead, patch: Partial<Lead>) {
     const res = await fetch("/api/manager/lead", {
@@ -55,8 +86,7 @@ export function ManagerDashboard({
       body: JSON.stringify({ leadId: lead.id, ...patch }),
     });
     if (!res.ok) {
-      const data = await res.json().catch(() => ({}));
-      setError(data.error ?? "Could not save that lead.");
+      setError(describeFailure(res, await readJson(res)));
       return;
     }
     setError("");

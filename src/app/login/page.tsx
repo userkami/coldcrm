@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { describeFailure, readJson } from "@/lib/api-client";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -20,12 +21,12 @@ export default function LoginPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, pin }),
       });
-      const data = await res.json();
+      const data = await readJson(res);
       if (!res.ok) {
-        setError(data.error ?? "Sign in failed.");
+        setError(describeFailure(res, data));
         return;
       }
-      router.push(data.redirectTo ?? "/agent");
+      router.push((data?.redirectTo as string | undefined) ?? "/agent");
       router.refresh();
     } catch {
       setError("Could not reach the server. Check your connection.");

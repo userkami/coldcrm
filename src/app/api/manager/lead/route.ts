@@ -1,5 +1,6 @@
 import { requireRoleApi } from "@/lib/auth";
 import { getRepository } from "@/lib/repo";
+import { failureResponse } from "@/lib/api";
 import { isLeadStatus } from "@/lib/status";
 
 /**
@@ -35,24 +36,32 @@ export async function PATCH(request: Request) {
     return Response.json({ error: "Unknown status." }, { status: 400 });
   }
 
-  const repo = await getRepository();
-  const existing = await repo.getLead(body.leadId);
-  if (!existing) {
-    return Response.json({ error: "Lead not found." }, { status: 404 });
+  try {
+    const repo = await getRepository();
+    const existing = await repo.getLead(body.leadId);
+    if (!existing) {
+      return Response.json({ error: "Lead not found." }, { status: 404 });
+    }
+
+    const patch: Parameters<typeof repo.updateLead>[1] = {};
+
+    if (body.name !== undefined) patch.name = body.name.trim();
+    if (body.phone !== undefined) patch.phone = body.phone.trim();
+    if (body.company !== undefined) patch.company = body.company.trim();
+    if (body.city !== undefined) patch.city = body.city.trim();
+    if (body.source !== undefined) patch.source = body.source.trim();
+    if (body.callbackDate !== undefined) patch.callbackDate = body.callbackDate;
+    if (body.status !== undefined) patch.status = body.status as never;
+    if (body.assignedTo !== undefined) patch.assignedTo = body.assignedTo.trim();
+
+    await repo.updateLead(body.leadId, patch);
+
+    return Response.json({ ok: true, lead: await repo.getLead(body.leadId) });
+  } catch (error) {
+    return failureResponse(
+      "manager lead edit",
+      error,
+      "Could not save that lead. Please try again.",
+    );
   }
-
-  const patch: Parameters<typeof repo.updateLead>[1] = {};
-
-  if (body.name !== undefined) patch.name = body.name.trim();
-  if (body.phone !== undefined) patch.phone = body.phone.trim();
-  if (body.company !== undefined) patch.company = body.company.trim();
-  if (body.city !== undefined) patch.city = body.city.trim();
-  if (body.source !== undefined) patch.source = body.source.trim();
-  if (body.callbackDate !== undefined) patch.callbackDate = body.callbackDate;
-  if (body.status !== undefined) patch.status = body.status as never;
-  if (body.assignedTo !== undefined) patch.assignedTo = body.assignedTo.trim();
-
-  await repo.updateLead(body.leadId, patch);
-
-  return Response.json({ ok: true, lead: await repo.getLead(body.leadId) });
 }

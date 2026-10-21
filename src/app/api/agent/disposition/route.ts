@@ -1,8 +1,13 @@
 import { requireRoleApi } from "@/lib/auth";
 import { getRepository } from "@/lib/repo";
+import { failureResponse } from "@/lib/api";
 import { logDisposition } from "@/lib/queue";
 import { isLeadStatus } from "@/lib/status";
 import type { LeadStatus } from "@/lib/types";
+
+// Logging an outcome writes to the sheet and then claims the next lead, so
+// the function needs more than the platform default to finish.
+export const maxDuration = 30;
 
 export async function POST(request: Request) {
   const auth = await requireRoleApi("AGENT", "MANAGER");
@@ -38,38 +43,46 @@ export async function POST(request: Request) {
   const callbackDate =
     status === "Callback Requested" ? (body.callbackDate ?? "") : "";
 
-  const repo = await getRepository();
-  const result = await logDisposition(repo, {
-    email: auth.session.email,
-    name: auth.session.name,
-  }, {
-    leadId,
-    claimId,
-    status,
-    notes: (body.notes ?? "").trim(),
-    callbackDate,
-  });
+  try {
+    const repo = await getRepository();
+    const result = await logDisposition(repo, {
+      email: auth.session.email,
+      name: auth.session.name,
+    }, {
+      leadId,
+      claimId,
+      status,
+      notes: (body.notes ?? "").trim(),
+      callbackDate,
+    });
 
-  if (!result.ok) {
-    if (result.error === "not-found") {
-      return Response.json({ error: "Lead not found." }, { status: 404 });
+    if (!result.ok) {
+      if (result.error === "not-found") {
+        return Response.json({ error: "Lead not found." }, { status: 404 });
+      }
+      // The lead is no longer ours: another agent holds it, or our lock
+      // expired. Tell the client so it can drop the card rather than
+      // overwriting the current holder's notes.
+      return Response.json(
+        {
+          error:
+            "This lead is no longer assigned to you. It has been returned to the queue.",
+          code: "stale-claim",
+        },
+        { status: 409 },
+      );
     }
-    // The lead is no longer ours: another agent holds it, or our lock
-    // expired. Tell the client so it can drop the card rather than
-    // overwriting the current holder's notes.
-    return Response.json(
-      {
-        error:
-          "This lead is no longer assigned to you. It has been returned to the queue.",
-        code: "stale-claim",
-      },
-      { status: 409 },
+
+    return Response.json({
+      ok: true,
+      nextLead: result.nextLead,
+      reason: result.nextReason ?? null,
+    });
+  } catch (error) {
+    return failureResponse(
+      "disposition",
+      error,
+      "Could not save the outcome. Please try again.",
     );
   }
-
-  return Response.json({
-    ok: true,
-    nextLead: result.nextLead,
-    reason: result.nextReason ?? null,
-  });
 }
