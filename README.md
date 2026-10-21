@@ -149,17 +149,19 @@ The memory and Sheets backends are **swappable** via the `LeadsRepository` inter
 
 ## Deployment (Vercel)
 
+**Quick steps:**
+
 1. Push your code to GitHub (`.env.local` is gitignored)
 2. Import the repo on [vercel.com](https://vercel.com)
 3. Add environment variables in the Vercel project settings:
-   - `AUTH_SECRET`
-   - `CRM_DATA_BACKEND` (`memory` or `sheets`)
-   - For Sheets: `GOOGLE_CLIENT_EMAIL`, `GOOGLE_PRIVATE_KEY`, `SHEET_ID`
+   - `AUTH_SECRET` (generate with `openssl rand -base64 32`)
+   - `CRM_DATA_BACKEND=sheets`
+   - `GOOGLE_CLIENT_EMAIL`, `GOOGLE_PRIVATE_KEY`, `SHEET_ID`
 4. Deploy
 
-The app is stateless and scales horizontally. Each instance reads from the same backend (JSON file in `/tmp` for memory, Google Sheet for sheets).
+**Full deployment guide:** [`scripts/vercel-deploy.md`](scripts/vercel-deploy.md)
 
-**Memory backend on Vercel:** Vercel's filesystem is ephemeral. On each cold start, the `/tmp/crm.json` resets to empty. For persistence on Vercel, use the Sheets backend or migrate to Firestore (Phase 2).
+The app is stateless and scales horizontally. The GitHub Actions workflow runs tests on every push, and Vercel creates preview deployments for pull requests.
 
 ---
 

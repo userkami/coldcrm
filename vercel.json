@@ -1,0 +1,43 @@
+{
+  "buildCommand": "npm run build",
+  "devCommand": "npm run dev",
+  "installCommand": "npm install",
+  "framework": "nextjs",
+  "outputDirectory": ".next",
+  "env": {
+    "AUTH_SECRET": {
+      "description": "Random secret for session cookies. Generate with: openssl rand -base64 32",
+      "required": true
+    },
+    "CRM_DATA_BACKEND": {
+      "description": "Backend type: 'memory' or 'sheets'",
+      "value": "sheets"
+    },
+    "GOOGLE_CLIENT_EMAIL": {
+      "description": "Service account email from the Google Cloud JSON key",
+      "required": false
+    },
+    "GOOGLE_PRIVATE_KEY": {
+      "description": "Service account private key (with \\n sequences). Required when CRM_DATA_BACKEND=sheets",
+      "required": false
+    },
+    "SHEET_ID": {
+      "description": "Google Sheets spreadsheet ID. Required when CRM_DATA_BACKEND=sheets",
+      "required": false
+    },
+    "LOCK_TTL_SECONDS": {
+      "description": "Lock expiry time in seconds",
+      "value": "300"
+    },
+    "LOCK_SETTLE_MS": {
+      "description": "Claim settle delay in milliseconds",
+      "value": "1200"
+    },
+    "SHEET_CACHE_TTL_MS": {
+      "description": "Sheets read cache TTL in milliseconds",
+      "value": "5000"
+    }
+  },
+  "regions": ["iad1"],
+  "crons": []
+}
