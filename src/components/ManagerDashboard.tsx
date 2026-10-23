@@ -10,6 +10,7 @@ import { CallsPerDayChart } from "./CallsPerDayChart";
 import { LeadTable } from "./LeadTable";
 import { AgentAdmin } from "./AgentAdmin";
 import { LogoutButton } from "./LogoutButton";
+import { ThemeToggle } from "./ThemeToggle";
 
 export function ManagerDashboard({
   managerName,
@@ -116,6 +117,7 @@ export function ManagerDashboard({
             >
               Export calls
             </a>
+            <ThemeToggle />
             <LogoutButton />
           </div>
         </div>

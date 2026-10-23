@@ -7,6 +7,7 @@ import { LeadCard } from "@/components/LeadCard";
 import { DispositionForm } from "@/components/DispositionForm";
 import { LogoutButton } from "@/components/LogoutButton";
 import { AgentCallHistory } from "@/components/AgentCallHistory";
+import { ThemeToggle } from "@/components/ThemeToggle";
 
 interface AgentStats {
   callsToday: number;
@@ -196,7 +197,10 @@ export function AgentPortal({ agentName }: { agentName: string }) {
             <p className="text-sm font-semibold">{agentName}</p>
             <p className="text-xs text-ink-dim">Agent portal</p>
           </div>
-          <LogoutButton />
+          <div className="flex items-center gap-2">
+            <ThemeToggle />
+            <LogoutButton />
+          </div>
         </div>
 
         <div className="mx-auto grid max-w-2xl grid-cols-3 divide-x divide-edge border-t border-edge">
